@@ -8,7 +8,8 @@ Contributors
 ------------
 
  * [Henrique Souza](https://github.com/htssouza)
- * [Will McGinnis](https://gitbhub.com/wdm0006)
+ * [Will McGinnis](https://github.com/wdm0006)
+ * [Rob Harrigan](https://github.com/codebynumbers)
  
 Overview
 --------
@@ -90,6 +91,7 @@ Implemented functions are:
  * defaultParallelism()
  * emptyRDD()
  * parallelize()
+ * NewAPIHadoopRDD() (only for elasticsearch via elasticsearch-py)
  * range()
  * startTime()
  * stop()

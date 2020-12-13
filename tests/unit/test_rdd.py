@@ -172,6 +172,9 @@ class RDDTests (unittest.TestCase):
         l = [(1, 1), (2, 1), (2, 2), (3, 1), (3, 2), (3, 3)]
         rdd = RDD(l, self.SPARK_CONTEXT)
         rdd = rdd.reduceByKey(lambda a, b: a + b)
+
+        print(rdd)
+
         self.assertEquals(sorted(rdd.collect()), sorted([(1, 1), (2, 3), (3, 6)]))
 
     def test_cartesian(self):
@@ -274,6 +277,120 @@ class RDDTests (unittest.TestCase):
         output = rdd.collect()
         self.assertEquals(sorted(output), sorted(expected_output))
 
+    def test_left_outer_join(self):
+        sc = SparkContext(master='', conf=SparkConf())
+        rdd1 = sc.parallelize([('A', [1, 2, 3]), ('B', [2,3,4])])
+        rdd2 = sc.parallelize([('A', [1, 2, 3]), ('B', [2,3,4]), ('B', [4,5,6])])
+        out = rdd1.leftOuterJoin(rdd2).collect()
+        print(out)
+        self.assertEqual(len(out), 2)
+
+    def test_keys(self):
+        sc = SparkContext(master='', conf=SparkConf())
+        rdd = sc.parallelize([('A', 1), ('B', 2), ('C', 3)])
+        self.assertListEqual(rdd.keys().collect(), ['A', 'B', 'C'])
+
+    def test_values(self):
+        sc = SparkContext(master='', conf=SparkConf())
+        rdd = sc.parallelize([('A', 1), ('B', 2), ('C', 3)])
+        self.assertListEqual(rdd.values().collect(), [1, 2, 3])
+
+    def test_combineByKey(self):
+        sc = SparkContext(master='', conf=SparkConf())
+        rdd = sc.parallelize([
+            ('A', 1),
+            ('B', 2),
+            ('B', 3),
+            ('C', 4),
+            ('C', 5),
+            ('A', 6),
+        ])
+
+        def create_combiner(a):
+            return [a]
+
+        def merge_value(a, b):
+            a.append(b)
+            return a
+
+        def merge_combiners(a, b):
+            a.extend(b)
+            return a
+
+        rdd = rdd.combineByKey(create_combiner, merge_value, merge_combiners)
+        self.assertListEqual(
+            rdd.collect(),
+            [('A', [1, 6]), ('B', [2, 3]), ('C', [4, 5])],
+        )
+
+    def test_sortByKey_ascending(self):
+        sc = SparkContext(master='', conf=SparkConf())
+        rdd = (
+            sc.parallelize([
+                ('e', 5),
+                ('d', 4),
+                ('c', 3),
+                ('b', 2),
+                ('a', 1),
+            ])
+            .sortByKey(ascending=True)
+        )
+        self.assertListEqual(
+            rdd.collect(),
+            [
+                ('a', 1),
+                ('b', 2),
+                ('c', 3),
+                ('d', 4),
+                ('e', 5),
+            ],
+        )
+
+    def test_sortByKey_descending(self):
+        sc = SparkContext(master='', conf=SparkConf())
+        rdd = (
+            sc.parallelize([
+                ('a', 1),
+                ('b', 2),
+                ('c', 3),
+                ('d', 4),
+                ('e', 5),
+            ])
+            .sortByKey(ascending=False)
+        )
+        self.assertListEqual(
+            rdd.collect(),
+            [
+                ('e', 5),
+                ('d', 4),
+                ('c', 3),
+                ('b', 2),
+                ('a', 1),
+            ],
+        )
+
+    def test_sortBy_ascending(self):
+        sc = SparkContext(master='', conf=SparkConf())
+        rdd = (
+            sc.parallelize([5, 4, 3, 2, 1])
+            .sortBy(lambda x: x, ascending=True)
+        )
+        self.assertListEqual(rdd.collect(), [1, 2, 3, 4, 5])
+
+    def test_sortBy_descending(self):
+        sc = SparkContext(master='', conf=SparkConf())
+        rdd = (
+            sc.parallelize([1, 2, 3, 4, 5])
+            .sortBy(lambda x: x, ascending=False)
+        )
+        self.assertListEqual(rdd.collect(), [5, 4, 3, 2, 1])
+
+    def test_subtractByKey(self):
+        sc = SparkContext(master='', conf=SparkConf())
+        rdd1 = sc.parallelize([('A', 1), ('B', 2), ('C', 3)])
+        rdd2 = sc.parallelize([('A', None), ('C', None)])
+        self.assertListEqual(rdd1.subtractByKey(rdd2).collect(), [('B', 2)])
+
     def test_not_implemented_methods(self):
         sc = SparkContext(master='', conf=SparkConf())
         rdd = sc.parallelize([])
@@ -357,12 +474,6 @@ class RDDTests (unittest.TestCase):
             rdd.collectAsMap()
 
         with self.assertRaises(NotImplementedError):
-            rdd.keys()
-
-        with self.assertRaises(NotImplementedError):
-            rdd.values()
-
-        with self.assertRaises(NotImplementedError):
             rdd.reduceByKeyLocally(None)
 
         with self.assertRaises(NotImplementedError):
@@ -372,22 +483,10 @@ class RDDTests (unittest.TestCase):
             rdd.join(None, None)
 
         with self.assertRaises(NotImplementedError):
-            rdd.leftOuterJoin(None, None)
-
-        with self.assertRaises(NotImplementedError):
             rdd.rightOuterJoin(None, None)
 
         with self.assertRaises(NotImplementedError):
             rdd.fullOuterJoin(None, None)
-
-        with self.assertRaises(NotImplementedError):
-            rdd.partitionBy(None, None)
-
-        with self.assertRaises(NotImplementedError):
-            rdd.combineByKey(None, None, None, None)
-
-        with self.assertRaises(NotImplementedError):
-            rdd.aggregateByKey(None, None, None, None)
 
         with self.assertRaises(NotImplementedError):
             rdd.foldByKey(None, None, None)
@@ -405,22 +504,10 @@ class RDDTests (unittest.TestCase):
             rdd.sampleByKey(None, None, None)
 
         with self.assertRaises(NotImplementedError):
-            rdd.subtractByKey(None, None)
-
-        with self.assertRaises(NotImplementedError):
             rdd.subtract(None, None)
 
         with self.assertRaises(NotImplementedError):
-            rdd.keyBy(None)
-
-        with self.assertRaises(NotImplementedError):
-            rdd.repartition(None)
-
-        with self.assertRaises(NotImplementedError):
             rdd.coalesce(None, None)
-
-        with self.assertRaises(NotImplementedError):
-            rdd.zipWithUniqueId()
 
         with self.assertRaises(NotImplementedError):
             rdd.toDebugString()
